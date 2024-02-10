@@ -6,7 +6,7 @@ LISTS=( 'songs' 'classical' 'jams' 'youtubers' 'movies' 'christmas' 'theme-songs
 cd "$(dirname "$0")"
 source venv/bin/activate
 
-ulimit -n 16384
+ulimit -n 16384  # Fixes ERROR: [requests] Unexpected error: OSError: [Errno 24] Too many open files
 
 # Argument parsing
 if [[ "$1" != "" ]]
