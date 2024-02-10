@@ -37,7 +37,9 @@ else
     touch .commit_msg
     echo "Add songs from Spotify" > .commit_msg
     echo "" >> .commit_msg
-    git diff-index --name-status HEAD >> .commit_msg
+    git diff --name-status HEAD >> .commit_msg
+
+    sleep 5000
 
     git add .
     git commit -F .commit_msg
