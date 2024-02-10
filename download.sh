@@ -34,9 +34,13 @@ if git diff-index --quiet HEAD
 then
     echo "No changes to commit"
 else
-    commit_msg="Add songs from Spotify\n\n$(git diff-index --name-status HEAD)"
+    touch .commit_msg
+    echo "Add songs from Spotify" > .commit_msg
+    echo "" >> .commit_msg
+    git diff-index --name-status HEAD >> .commit_msg
+
     git add .
-    git commit -m "$commit_msg"
+    git commit -F .commit_msg
     git push
 fi
 
