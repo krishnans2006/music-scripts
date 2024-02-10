@@ -27,6 +27,19 @@ do
     python sort_spotdl.py "$list"
 done
 
+# Commit + Push
+git update-index --refresh -q
+
+if git diff-index --quiet HEAD
+then
+    echo "No changes to commit"
+else
+    commit_msg="Add songs from Spotify\n\n$(git diff-index --name-status HEAD)"
+    git add .
+    git commit -m "$commit_msg"
+    git push
+fi
+
 # Teardown
 ulimit -n 1024
 
