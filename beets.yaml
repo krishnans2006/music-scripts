@@ -1,0 +1,26 @@
+directory: ./final
+library: ./beets-library.db
+plugins: chroma lyrics fetchart smartplaylist inline
+
+acoustid:
+  apikey: YOUR_ACOUSTID_API_KEY
+
+import:
+  move: yes
+  write: yes
+  quiet: yes
+  autotag: yes
+
+paths:
+  default: $albumartist/$album/$track - $title
+
+lyrics:
+  auto: yes
+  fallback: ""
+  synced: yes
+
+smartplaylist:
+  playlist_dir: ./final
+  playlists:
+    - name: Liked_Music.m3u
+      query: 'playlist_source:"Liked Music"'
