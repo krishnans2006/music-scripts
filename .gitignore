@@ -161,3 +161,6 @@ cython_debug/
 
 # Custom
 .commit_msg
+
+staging/
+yt-dlp-archive.txt
