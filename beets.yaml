@@ -23,4 +23,4 @@ smartplaylist:
   playlist_dir: ./final
   playlists:
     - name: Liked_Music.m3u
-      query: 'playlist_source:"Liked Music"'
+      query: 'playlist_source:"Liked Music" id+'
