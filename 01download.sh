@@ -13,10 +13,10 @@ mkdir -p ./staging
 yt-dlp \
     -t aac \
     --audio-quality 0 \
-    --embed-metadata \
     --embed-thumbnail --convert-thumbnail jpg \
     --ppa "ThumbnailsConvertor+FFmpeg_o:-c:v mjpeg -qmin 1 -qscale:v 1 -vf crop=\"'if(gt(ih,iw),iw,ih)':'if(gt(iw,ih),ih,iw)'\"" \
-    -o "./staging/%(title)s - %(artist)s.%(ext)s" \
+    --embed-metadata --parse-metadata "playlist_index:%(track_number)s" \
+    -o "./staging/%(playlist_count+1-playlist_index)04d - %(title)s - %(artist)s.%(ext)s" \
     --cookies-from-browser "firefox:$FIREFOX_PROFILE_DIR" \
     --download-archive "./yt-dlp-archive.txt" \
     "$PLAYLIST_URL"
