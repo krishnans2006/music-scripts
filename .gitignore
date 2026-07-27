@@ -164,3 +164,4 @@ cython_debug/
 
 staging/
 yt-dlp-archive.txt
+beets-generated.yaml

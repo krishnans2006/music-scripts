@@ -1,9 +1,9 @@
-directory: ./final
-library: ./beets-library.db
+directory: SCRIPT_DIR/final
+library: SCRIPT_DIR/beets-library.db
 plugins: chroma lyrics fetchart smartplaylist inline
 
 acoustid:
-  apikey: YOUR_ACOUSTID_API_KEY
+  apikey: ACOUSTID_API_KEY
 
 import:
   move: yes
