@@ -1,6 +1,6 @@
 directory: SCRIPT_DIR/final
 library: SCRIPT_DIR/beets-library.db
-plugins: chroma lyrics fetchart smartplaylist inline
+plugins: chroma musicbrainz lyrics fetchart smartplaylist inline
 
 acoustid:
   apikey: ACOUSTID_API_KEY
@@ -10,6 +10,7 @@ import:
   write: yes
   quiet: yes
   autotag: yes
+  singletons: yes
 
 paths:
   default: $albumartist/$album/$track - $title
