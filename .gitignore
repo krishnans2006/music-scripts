@@ -164,6 +164,7 @@ cython_debug/
 
 staging/
 staging-backup/
+staging-backup-old/
 final/
 yt-dlp-archive.txt
 beets-generated.yaml
