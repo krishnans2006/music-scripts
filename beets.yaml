@@ -24,7 +24,8 @@ paths:
   default: $albumartist/$album/$track - $title
 
 lyrics:
-  auto: yes
+  # Fetch after importing so album merges are fully committed first
+  auto: no
   fallback: ""
   synced: yes
   sources: [lrclib, genius]

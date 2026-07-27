@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# This script exports lyrics stored by beets as Jellyfin-compatible sidecars.
+# This script fetches lyrics with beets and exports Jellyfin-compatible sidecars.
 # Synchronized lyrics use .lrc; unsynchronized lyrics use .txt.
 
 set -euo pipefail
@@ -12,6 +12,8 @@ if [ ! -f "$BEETS_CONFIG" ]; then
     echo "Error: beets-generated.yaml not found. Run ./03process.sh first."
     exit 1
 fi
+
+beet -c "$BEETS_CONFIG" lyrics
 
 for item_id in $(beet -c "$BEETS_CONFIG" ls -f '$id' 'lyrics::.'); do
     audio_file="$(beet -c "$BEETS_CONFIG" ls -f '$path' "id:$item_id")"
