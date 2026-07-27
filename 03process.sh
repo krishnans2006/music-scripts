@@ -4,9 +4,7 @@
 # - Fingerprint music using AcoustID
 # - Fetch metadata from MusicBrainz
 # - Tag music files with the fetched metadata
-# - Fetch lyrics
-# - Move the processed music and lyrics to a Jellyfin-compatible directory structure (./final)
-# - Generate playlist files (.m3u) using beets' smartplaylist plugin
+# - Move the processed music to a Jellyfin-compatible directory structure (./final)
 
 set -e
 
@@ -35,5 +33,3 @@ sed -e "s|SCRIPT_DIR|$SCRIPT_DIR|g" \
     beets.yaml > beets-generated.yaml
 
 beet -c ./beets-generated.yaml import --set playlist_source="Liked Music" ./staging
-
-beet -c ./beets-generated.yaml splupdate
