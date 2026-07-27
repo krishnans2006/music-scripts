@@ -6,6 +6,7 @@
 # - Tag music files with the fetched metadata
 # - Fetch lyrics
 # - Move the processed music and lyrics to a Jellyfin-compatible directory structure (./final)
+# - Generate playlist files (.m3u) using beets' smartplaylist plugin
 
 set -e
 
@@ -34,3 +35,5 @@ sed -e "s|SCRIPT_DIR|$SCRIPT_DIR|g" \
     beets.yaml > beets-generated.yaml
 
 beet -v -c ./beets.yaml import -q --set playlist_source="Liked Music" ./staging
+
+beet -v -c ./beets.yaml splupdate
