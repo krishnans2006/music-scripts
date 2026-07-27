@@ -34,6 +34,6 @@ sed -e "s|SCRIPT_DIR|$SCRIPT_DIR|g" \
     -e "s|ACOUSTID_API_KEY|$ACOUSTID_API_KEY|g" \
     beets.yaml > beets-generated.yaml
 
-beet -v -c ./beets.yaml import -q --set playlist_source="Liked Music" ./staging
+beet -v -c ./beets-generated.yaml import -q --set playlist_source="Liked Music" ./staging
 
-beet -v -c ./beets.yaml splupdate
+beet -v -c ./beets-generated.yaml splupdate
