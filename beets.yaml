@@ -12,8 +12,9 @@ import:
   from_scratch: yes
   quiet: yes
   quiet_fallback: asis
-  # Quiet mode normally skips album duplicates. Merge their tracks instead.
-  duplicate_action: merge
+  # Keep separate records while the path template groups matching albums.
+  # Merging can reuse staging paths after their files have already moved.
+  duplicate_action: keep
 
 match:
   # We want as-is for everything, so strong threshold is 0
