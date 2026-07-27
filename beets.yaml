@@ -6,7 +6,6 @@ acoustid:
   apikey: ACOUSTID_API_KEY
 
 import:
-  singletons: yes
   autotag: yes
   move: yes
   write: yes
