@@ -27,6 +27,7 @@ lyrics:
   auto: yes
   fallback: ""
   synced: yes
+  sources: [lrclib, genius]
 
 smartplaylist:
   playlist_dir: ./final
