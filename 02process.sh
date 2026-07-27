@@ -13,5 +13,5 @@ if [ ! -d "./staging" ] || [ -z "$(ls -A ./staging)" ]; then
    echo "No new music downloaded in ./staging. Exiting."
    exit 0
 else
-   beet -c ./beets.yaml import -q --set playlist_source="Liked Music" ./staging
+   beet -v -c ./beets.yaml import -q --set playlist_source="Liked Music" ./staging
 fi
