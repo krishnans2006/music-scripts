@@ -163,6 +163,8 @@ cython_debug/
 .commit_msg
 
 staging/
+staging-backup/
+final/
 yt-dlp-archive.txt
 beets-generated.yaml
 beets-library.db
