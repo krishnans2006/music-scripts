@@ -15,11 +15,14 @@ import:
   bell: yes
 
 match:
-  # Experimentally, strong matches seem to have a score of 88.9%
+  # Experimentally, strong matches seem to have a score of 77.3%
   # and less strong matches have lower scores, so strong_rec_thresh is
-  # changed from the default (0.04 => 96%) to 0.12 => 88%
-  # The medium_rec_thresh is unchanged from the default (0.25 => 75%)
-  strong_rec_thresh: 0.12
+  # changed from the default (0.04 => 96%) to 0.23 => 77%
+  # The medium_rec_thresh is also lowered from the default (0.25 => 75%)
+  # to 0.30 => 70%
+  # This accounts for the mismatch in "id" that we use for chronological sort
+  strong_rec_thresh: 0.23
+  medium_rec_thresh: 0.30
 
 paths:
   default: $albumartist/$album/$track - $title
