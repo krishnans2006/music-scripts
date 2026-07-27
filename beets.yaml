@@ -9,20 +9,16 @@ import:
   autotag: yes
   move: yes
   write: yes
-  incremental: yes
-  incremental_skip_later: yes
   from_scratch: yes
-  bell: yes
+  quiet: yes
+  quiet_fallback: asis
+  # Quiet mode normally skips album duplicates. Merge their tracks instead.
+  duplicate_action: merge
 
 match:
-  # Experimentally, strong matches seem to have a score of 77.3%
-  # and less strong matches have lower scores, so strong_rec_thresh is
-  # changed from the default (0.04 => 96%) to 0.23 => 77%
-  # The medium_rec_thresh is also lowered from the default (0.25 => 75%)
-  # to 0.30 => 70%
-  # This accounts for the mismatch in "id" that we use for chronological sort
-  strong_rec_thresh: 0.23
-  medium_rec_thresh: 0.30
+  # We want as-is for everything, so strong threshold is 0
+  # Strong means it bypasses the prompt and always re-tags
+  strong_rec_thresh: 0
 
 paths:
   default: $albumartist/$album/$track - $title
