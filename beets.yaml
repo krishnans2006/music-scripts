@@ -32,7 +32,8 @@ lyrics:
   sources: [lrclib, genius]
 
 smartplaylist:
-  playlist_dir: ./final
+  playlist_dir: SCRIPT_DIR/final
+  relative_to: SCRIPT_DIR/final
   playlists:
     - name: Liked_Music.m3u
       query: 'playlist_source:"Liked Music" id+'
