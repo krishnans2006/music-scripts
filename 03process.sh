@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 
 # This script uses beets (https://beets.io/) to:
-# - Fingerprint music using AcoustID
-# - Fetch metadata from MusicBrainz
-# - Tag music files with the fetched metadata
+# - If not using as-is (which is the default):
+#   - Fingerprint music using AcoustID
+#   - Fetch metadata from MusicBrainz
+#   - Tag music files with the fetched metadata
 # - Move the processed music to a Jellyfin-compatible directory structure (./final)
 
 set -e
