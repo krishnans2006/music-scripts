@@ -11,21 +11,18 @@
 
       # The systems supported for this flake
       supportedSystems = [
-        "x86_64-linux" # 64-bit Intel/AMD Linux
-        "aarch64-linux" # 64-bit ARM Linux
-        "aarch64-darwin" # 64-bit ARM macOS
+        "x86_64-linux"  # 64-bit Intel/AMD Linux
+        "aarch64-linux"  # 64-bit ARM Linux
+        "aarch64-darwin"  # 64-bit ARM macOS
       ];
 
       # Helper to provide system-specific attributes
-      forEachSupportedSystem =
-        f:
-        lib.genAttrs supportedSystems (
-          system:
-          f {
-            inherit system;
-            pkgs = import inputs.nixpkgs { inherit system; };
-          }
-        );
+      forEachSupportedSystem = f: lib.genAttrs supportedSystems (
+        system: f {
+          inherit system;
+          pkgs = import inputs.nixpkgs { inherit system; };
+        }
+      );
 
       version = "3.14";
     in
@@ -33,13 +30,11 @@
       devShells = forEachSupportedSystem (
         { pkgs, ... }:
         let
-          concatMajorMinor =
-            v:
-            lib.pipe v [
-              lib.versions.splitVersion
-              (lib.sublist 0 2)
-              lib.concatStrings
-            ];
+          concatMajorMinor = v: lib.pipe v [
+            lib.versions.splitVersion
+            (lib.sublist 0 2)
+            lib.concatStrings
+          ];
 
           python = pkgs."python${concatMajorMinor version}";
         in
@@ -69,6 +64,7 @@
 
               yt-dlp
               beets
+              mutagen
               # pyacoustid
               # pylrc
               # beautifulsoup4
