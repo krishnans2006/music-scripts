@@ -28,3 +28,7 @@ yt-dlp \
     --cookies-from-browser "firefox:$FIREFOX_PROFILE_DIR" \
     --download-archive "./yt-dlp-archive.txt" \
     "$PLAYLIST_URL"
+
+# Harmonize library once at the end of the entire download run
+echo "Running library-wide Navidrome harmonization..."
+"$PYTHON_BIN" "$SCRIPT_DIR/postprocess_navidrome.py" "$SCRIPT_DIR/staging" --harmonize-only
