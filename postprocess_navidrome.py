@@ -262,9 +262,12 @@ def harmonize_library(directory_path: Path):
     2. Shared Artist Studio Albums:
        If tracks with the same album title share at least one common artist (e.g. Ed Sheeran on '+',
        The Weeknd on 'Dawn FM'), unifies aART to the shared artist.
-       If tracks share the same album title but have ZERO shared artists and are not a compilation
-       (e.g. Journey's 'Escape' vs Dean Lewis's 'Escape'), they are preserved as separate albums.
-    3. Release Date Harmonization:
+    3. Multi-Artist Same-Date Compilations:
+       If tracks share an album title and the exact same release date but have no shared artists
+       (e.g. 'Romantischer Abend'), unifies aART to 'Various Artists' and flags cpil=True.
+       If release dates differ (e.g. Journey's 'Escape' [1981] vs Dean Lewis's 'Escape' [2026]),
+       they are preserved as separate albums.
+    4. Release Date Harmonization:
        For all tracks sharing the same (Album, AlbumArtist), harmonizes release dates to the earliest
        date, preventing Navidrome from splitting albums by differing video upload dates.
     """
@@ -356,6 +359,27 @@ def harmonize_library(directory_path: Path):
                         r['audio'].save()
                         harmonized_count += 1
                         print(f"  [Harmonized aART] '{sample_alb}': Set '{r['path'].name}' aART='{canonical_artist}'")
+        else:
+            # Multi-artist collection with NO shared artist:
+            # If all tracks share the exact same release date, it is a multi-artist compilation release
+            # (e.g. 'Romantischer Abend').
+            # If release dates differ, they are independent releases with coincidentally identical names.
+            days = set(r['day'] for r in recs if r['day'])
+            if len(days) == 1:
+                for r in recs:
+                    changed = False
+                    if r['aart'] != "Various Artists":
+                        r['audio']['aART'] = ["Various Artists"]
+                        r['audio']['----:com.apple.itunes:albumartists'] = [MP4FreeForm(b"Various Artists")]
+                        r['aart'] = "Various Artists"
+                        changed = True
+                    if r['audio'].get('cpil') is not True:
+                        r['audio']['cpil'] = True
+                        changed = True
+                    if changed:
+                        r['audio'].save()
+                        harmonized_count += 1
+                        print(f"  [Harmonized Compilation] '{sample_alb}': Set '{r['path'].name}' aART='Various Artists' (cpil=True)")
 
     # Pass 2: Unify Release Dates within (Album, AlbumArtist) groups
     album_artist_groups = defaultdict(list)
