@@ -16,7 +16,7 @@ Enhances M4A/AAC files downloaded via yt-dlp with rich, native Navidrome tags:
    - Unifies release dates across tracks sharing the same (Album, AlbumArtist) to the earliest date,
      preventing date-based album splitting in Navidrome.
    - Unifies Album Artists (aART) on collaborative/soundtrack tracks dynamically without hardcoding.
-10. Automatic synchronization with a Navidrome-compatible Liked_Music.m3u8 playlist.
+10. Automatic synchronization with a Navidrome-compatible Liked Music.m3u8 playlist.
 """
 
 import sys
@@ -240,8 +240,8 @@ def process_audio_file(file_path: Path, keep_json: bool = False):
     print(f"[Navidrome Tagger] Processed: '{track_title}' by {display_artist} [Artists: {artists}]")
 
     # --- 10. PLAYLIST SYNC ---
-    # Maintain Liked_Music.m3u8 playlist in the parent directory
-    playlist_path = file_path.parent / "Liked_Music.m3u8"
+    # Maintain Liked Music.m3u8 playlist in the parent directory
+    playlist_path = file_path.parent / "Liked Music.m3u8"
     update_m3u8_playlist(playlist_path, file_path.name)
 
     # Clean up info.json
