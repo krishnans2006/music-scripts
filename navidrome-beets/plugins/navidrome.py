@@ -1,0 +1,173 @@
+"""
+navidrome.py - Beets companion plugin for Navidrome integration.
+
+1. MusicBrainz smart matcher:
+   - Removes broken 'alias' parameter from recording search queries.
+   - Strips YouTube soundtrack and feature noise (e.g. '(From Barbie The Album)').
+   - Evaluates track distance using primary artist and clean title.
+2. Navidrome multi-valued & album harmonization:
+   - Preserves MusicBrainz authoritative multi-valued artists (----:com.apple.iTunes:ARTISTS).
+   - Sets primary albumartist on singletons so Navidrome never splits tracks.
+   - Harmonizes album release dates across matching album names upon import completion.
+   - Sets compilation flag (cpil = 1) only for multi-artist albums.
+"""
+
+import re
+from collections import defaultdict
+
+from beets.plugins import BeetsPlugin
+from beets.autotag import match, TrackInfo
+from beets.library import Item
+import beetsplug.musicbrainz as mb
+
+
+def clean_title_for_matching(title: str) -> str:
+    if not title:
+        return ""
+    cleaned = re.sub(
+        r'\s*[\(\[](?:From|featuring|feat\.?|ft\.?).*?[\)\]]',
+        '',
+        title,
+        flags=re.IGNORECASE
+    ).strip()
+    return cleaned if cleaned else title
+
+
+def get_primary_artist(artist: str) -> str:
+    if not artist:
+        return ""
+    tokens = re.split(
+        r'\s*(?:,|&|\bfeaturing\b|\bfeat\.?|\bft\.?|\bwith\b|\bvs\.?|\bx\b|\/|;)\s*',
+        artist,
+        flags=re.IGNORECASE
+    )
+    return tokens[0].strip() if tokens and tokens[0].strip() else artist
+
+
+def parse_collaborators(artist: str) -> list[str]:
+    if not artist:
+        return []
+    parts = re.split(
+        r'\s*(?:,|&|\bfeaturing\b|\bfeat\.?|\bft\.?|\bwith\b|\bvs\.?|\bx\b|\/|;)\s*',
+        artist,
+        flags=re.IGNORECASE
+    )
+    artists = []
+    for p in parts:
+        clean = p.strip().strip("'\"")
+        if clean and clean not in artists:
+            artists.append(clean)
+    return artists
+
+
+# 1. MusicBrainz query builder and track distance
+_orig_get_search = mb.MusicBrainzPlugin.get_search_query_with_filters
+
+def _smart_get_search_query_with_filters(self, query_type, items, artist, name, va_likely):
+    if query_type == "track":
+        clean_art = get_primary_artist(artist)
+        clean_tit = clean_title_for_matching(name)
+        criteria = {"artist": clean_art, "recording": clean_tit}
+        return "", {k: v.lower().strip() for k, v in criteria.items() if v.strip()}
+    return _orig_get_search(self, query_type, items, artist, name, va_likely)
+
+mb.MusicBrainzPlugin.get_search_query_with_filters = _smart_get_search_query_with_filters
+
+
+_orig_track_distance = match.track_distance
+
+def _smart_track_distance(item: Item, track_info: TrackInfo, incl_artist: bool = False):
+    clean_item_title = clean_title_for_matching(item.title)
+    primary_item_artist = get_primary_artist(item.artist)
+
+    clean_info_title = clean_title_for_matching(track_info.title)
+    primary_info_artist = get_primary_artist(track_info.artist)
+
+    temp_item = Item(artist=primary_item_artist, title=clean_item_title, length=item.length)
+    temp_info = TrackInfo(
+        title=clean_info_title,
+        track_id=track_info.track_id,
+        artist=primary_info_artist,
+        artist_id=track_info.artist_id,
+        length=track_info.length,
+        index=track_info.index,
+        medium=track_info.medium,
+        artist_sort=track_info.artist_sort,
+        disctitle=track_info.disctitle,
+        artist_credit=track_info.artist_credit,
+        data_source=track_info.data_source,
+        data_url=track_info.data_url,
+    )
+    return _orig_track_distance(temp_item, temp_info, incl_artist)
+
+match.track_distance = _smart_track_distance
+
+
+class NavidromePlugin(BeetsPlugin):
+    def __init__(self):
+        super().__init__()
+        self._log.info("Navidrome plugin active: multi-artist and harmonization enabled")
+        self.register_listener("item_imported", self.on_item_imported)
+        self.register_listener("import", self.on_import_finished)
+
+    def on_item_imported(self, lib, item: Item):
+        changed = False
+
+        # Prefer MusicBrainz authoritative multi-valued artists if already populated
+        if not item.artists:
+            collabs = parse_collaborators(item.artist)
+            if len(collabs) > 1:
+                item.artists = collabs
+                changed = True
+            elif item.artist:
+                item.artists = [item.artist]
+                changed = True
+
+        # Ensure singletons have a primary albumartist so Navidrome doesn't split tracks
+        primary_art = item.artists[0] if item.artists else get_primary_artist(item.artist)
+        if not item.albumartist and primary_art:
+            item.albumartist = primary_art
+            item.albumartists = [primary_art]
+            changed = True
+
+        if changed:
+            item.store()
+            item.try_write()
+
+    def on_import_finished(self, lib, paths):
+        """Harmonize album release dates and compilation flag across imported albums."""
+        albums = defaultdict(list)
+        for item in lib.items():
+            if item.album:
+                albums[item.album].append(item)
+
+        for album_name, items in albums.items():
+            if len(items) <= 1:
+                continue
+
+            # Determine canonical date (earliest non-zero year)
+            valid_years = [i.year for i in items if i.year and i.year > 0]
+            canonical_year = min(valid_years) if valid_years else None
+            
+            # Check if multi-artist compilation based on primary artist
+            primary_artists = {get_primary_artist(i.artist) for i in items}
+            is_comp = len(primary_artists) > 1
+            canonical_albumartist = "Various Artists" if is_comp else list(primary_artists)[0]
+
+            for item in items:
+                updated = False
+                if canonical_year and item.year != canonical_year:
+                    item.year = canonical_year
+                    updated = True
+                if is_comp and not item.comp:
+                    item.comp = True
+                    updated = True
+                if item.albumartist != canonical_albumartist:
+                    item.albumartist = canonical_albumartist
+                    item.albumartists = [canonical_albumartist]
+                    updated = True
+                if updated:
+                    item.store()
+                    item.try_write()
+
+        self._log.info("Navidrome album harmonization completed.")

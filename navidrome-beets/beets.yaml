@@ -1,0 +1,36 @@
+directory: SCRIPT_DIR/final
+library: SCRIPT_DIR/beets-library.db
+pluginpath:
+  - SCRIPT_DIR/plugins
+plugins: musicbrainz lyrics navidrome inline
+
+import:
+  autotag: yes
+  move: yes
+  write: yes
+  from_scratch: no
+  quiet: yes
+  quiet_fallback: asis
+  duplicate_action: keep
+  singletons: yes
+
+lyrics:
+  auto: yes
+  synced: yes
+  sources: [lrclib]
+
+match:
+  strong_rec_thresh: 0.18
+  medium_rec_thresh: 0.30
+  rec_gap_thresh: 0.15
+  distance_weights:
+    track_index: 0.0
+    track_length: 2.0
+    track_title: 3.0
+    track_artist: 2.0
+  track_length_grace: 10
+  track_length_max: 30
+
+paths:
+  default: $artist - $title
+  singleton: $artist - $title

@@ -168,4 +168,5 @@ staging-backup-old/
 final/
 yt-dlp-archive.txt
 beets-generated.yaml
-beets-library.db
+beets-library.db*
+config/
