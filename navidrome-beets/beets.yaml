@@ -11,7 +11,7 @@ import:
   from_scratch: no
   quiet: yes
   quiet_fallback: asis
-  duplicate_action: keep
+  duplicate_action: skip
   singletons: yes
 
 lyrics:
