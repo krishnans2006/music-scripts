@@ -2,7 +2,7 @@ directory: SCRIPT_DIR/final
 library: SCRIPT_DIR/beets-library.db
 pluginpath:
   - SCRIPT_DIR/plugins
-plugins: musicbrainz lyrics navidrome inline
+plugins: musicbrainz lyrics navidrome
 
 import:
   autotag: yes
@@ -32,5 +32,5 @@ match:
   track_length_max: 30
 
 paths:
-  default: $artist - $title
-  singleton: $artist - $title
+  default: ${track_prefix} - $artist - $title
+  singleton: ${track_prefix} - $artist - $title

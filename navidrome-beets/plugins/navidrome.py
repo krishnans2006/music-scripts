@@ -10,8 +10,11 @@ navidrome.py - Beets companion plugin for Navidrome integration.
    - Sets primary albumartist on singletons so Navidrome never splits tracks.
    - Harmonizes album release dates across matching album names upon import completion.
    - Sets compilation flag (cpil = 1) only for multi-artist albums.
+3. Playlist prefix preservation:
+   - Preserves the 4-digit playlist numbering prefix in filename and track tags.
 """
 
+import os
 import re
 from collections import defaultdict
 
@@ -106,12 +109,56 @@ match.track_distance = _smart_track_distance
 class NavidromePlugin(BeetsPlugin):
     def __init__(self):
         super().__init__()
-        self._log.info("Navidrome plugin active: multi-artist and harmonization enabled")
+        self._log.info("Navidrome plugin active: multi-artist, prefix, and harmonization enabled")
+        self.template_fields["track_prefix"] = self._get_track_prefix
+        self.register_listener("import_task_created", self.on_import_task_created)
         self.register_listener("item_imported", self.on_item_imported)
         self.register_listener("import", self.on_import_finished)
 
+    def _get_track_prefix(self, item: Item) -> str:
+        # Check raw flex dict to prevent recursive getter invocation
+        prefix = item._values_flex.get("track_prefix")
+        if prefix:
+            return str(prefix)
+        path_str = item.path.decode("utf-8", "ignore") if isinstance(item.path, bytes) else str(item.path or "")
+        m = re.match(r"^(\d{4})\s*-\s*", os.path.basename(path_str))
+        if m:
+            prefix = m.group(1)
+            item._values_flex["track_prefix"] = prefix
+            return prefix
+        if getattr(item, "track", None):
+            return f"{item.track:04d}"
+        return "0000"
+
+    def on_import_task_created(self, session, task):
+        items = task.imported_items() if hasattr(task, "imported_items") else ([task.item] if hasattr(task, "item") else [])
+        for item in items:
+            path_str = item.path.decode("utf-8", "ignore") if isinstance(item.path, bytes) else str(item.path or "")
+            m = re.match(r"^(\d{4})\s*-\s*", os.path.basename(path_str))
+            if m:
+                item._values_flex["track_prefix"] = m.group(1)
+
     def on_item_imported(self, lib, item: Item):
         changed = False
+
+        # Set track number to playlist order index if track_prefix is present
+        prefix = item._values_flex.get("track_prefix")
+        if not prefix:
+            path_str = item.path.decode("utf-8", "ignore") if isinstance(item.path, bytes) else str(item.path or "")
+            m = re.match(r"^(\d{4})\s*-\s*", os.path.basename(path_str))
+            if m:
+                prefix = m.group(1)
+                item._values_flex["track_prefix"] = prefix
+
+        if prefix:
+            try:
+                new_track = int(prefix)
+                if item.track != new_track:
+                    item.track = new_track
+                    item.tracktotal = None
+                    changed = True
+            except (ValueError, TypeError):
+                pass
 
         # Prefer MusicBrainz authoritative multi-valued artists if already populated
         if not item.artists:
