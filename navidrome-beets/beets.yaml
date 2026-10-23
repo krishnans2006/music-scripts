@@ -2,7 +2,7 @@ directory: SCRIPT_DIR/final
 library: SCRIPT_DIR/beets-library.db
 pluginpath:
   - SCRIPT_DIR/plugins
-plugins: musicbrainz lyrics navidrome smartplaylist
+plugins: musicbrainz lyrics navidrome smartplaylist replaygain
 
 import:
   autotag: yes
@@ -18,6 +18,11 @@ lyrics:
   auto: yes
   synced: yes
   sources: [lrclib]
+
+replaygain:
+  auto: no
+  backend: ffmpeg
+  targetlevel: 89
 
 match:
   strong_rec_thresh: 0.18
