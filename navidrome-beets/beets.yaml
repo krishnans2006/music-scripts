@@ -2,7 +2,7 @@ directory: SCRIPT_DIR/final
 library: SCRIPT_DIR/beets-library.db
 pluginpath:
   - SCRIPT_DIR/plugins
-plugins: musicbrainz lyrics navidrome
+plugins: musicbrainz lyrics navidrome smartplaylist
 
 import:
   autotag: yes
@@ -34,3 +34,12 @@ match:
 paths:
   default: ${track_prefix} - $artist - $title
   singleton: ${track_prefix} - $artist - $title
+
+smartplaylist:
+  playlist_dir: SCRIPT_DIR/final
+  relative_to: SCRIPT_DIR/final
+  output: extm3u
+  auto: yes
+  playlists:
+    - name: 'Liked Music.m3u8'
+      query: 'track+'
