@@ -65,6 +65,8 @@
               yt-dlp
               beets
               mutagen
+              ytmusicapi
+              rich
               # pyacoustid
               # pylrc
               # beautifulsoup4

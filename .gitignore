@@ -170,3 +170,8 @@ yt-dlp-archive.txt
 beets-generated.yaml
 beets-library.db*
 config/
+
+# YouTube Music history scrobbler
+watch-history*.json
+formatted*.json
+.*cache*.json
