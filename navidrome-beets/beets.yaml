@@ -28,8 +28,8 @@ replaygain:
   targetlevel: 89
 
 match:
-  strong_rec_thresh: 0.18
-  medium_rec_thresh: 0.30
+  strong_rec_thresh: 0.25
+  medium_rec_thresh: 0.32
   rec_gap_thresh: 0.15
   distance_weights:
     track_index: 0.0
@@ -48,6 +48,3 @@ smartplaylist:
   relative_to: SCRIPT_DIR/final
   output: extm3u
   auto: yes
-  playlists:
-    - name: 'Liked Music.m3u8'
-      query: 'track+'

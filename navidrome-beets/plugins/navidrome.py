@@ -3,8 +3,8 @@ navidrome.py - Beets companion plugin for Navidrome integration.
 
 1. MusicBrainz & Chroma matcher helper:
    - Normalizes Unicode compatibility characters (e.g. full-width punctuation) via standard NFKC.
-   - Removes broken 'alias' parameter from recording search queries.
-   - Cleans generic feature/soundtrack noise from title queries.
+   - Cleans generic feature/edition/video noise from title queries and distance checks.
+   - Matches artist against canonical artist, credit name, or collaborator list (e.g. MILEY -> Miley Cyrus).
    - Evaluates track distance using primary artist and clean title.
 2. Navidrome multi-valued & album harmonization:
    - Preserves MusicBrainz authoritative multi-valued artists (----:com.apple.iTunes:ARTISTS).
@@ -22,18 +22,20 @@ from collections import defaultdict
 
 from beets.plugins import BeetsPlugin
 from beets.autotag import match, TrackInfo
+from beets.autotag.distance import string_dist
 from beets.library import Item
 import beetsplug.musicbrainz as mb
 
 
 def clean_title_for_matching(title: str) -> str:
-    """Strip generic feature tags or soundtrack labels from title for cleaner matching."""
+    """Strip generic feature tags, audio/video tags, or edition labels for cleaner matching."""
     if not title:
         return ""
     title = unicodedata.normalize("NFKC", title)
+    title = re.sub(r"^[【\[](?:Official|公式|MV)[】\]]\s*", "", title, flags=re.IGNORECASE)
     cleaned = re.sub(
-        r'\s*[\(\[](?:From|featuring|feat\.?|ft\.?).*?[\)\]]',
-        '',
+        r"\s*[\(\[](?:From|featuring|feat\.?|ft\.?|Official|Single Version|Album Version|Radio Edit|Remaster(?:ed)?(?:\s*\d+)?|Acoustic Version|Acoustic|Audio|Visualizer|Lyric(?:s)?(?:\s*Video)?|Video|Music Video|Full Spec Edition|Taxi Driver Edition).*?[\)\]]",
+        "",
         title,
         flags=re.IGNORECASE
     ).strip()
@@ -63,6 +65,26 @@ def get_primary_artist(artist: str) -> str:
         flags=re.IGNORECASE
     )
     return tokens[0].strip() if tokens and tokens[0].strip() else artist
+
+
+def best_artist_for_info(item_artist: str, track_info: TrackInfo) -> str:
+    """Find the best-matching artist representation between canonical artist, credit, and member artists."""
+    candidates = [track_info.artist, getattr(track_info, "artist_credit", None)]
+    if getattr(track_info, "artists", None):
+        candidates.extend(track_info.artists)
+
+    best = track_info.artist or ""
+    best_dist = 1.0
+    clean_item = get_primary_artist(item_artist).lower()
+    for cand in candidates:
+        if not cand:
+            continue
+        primary = get_primary_artist(cand)
+        d = string_dist(clean_item, primary.lower())
+        if d < best_dist:
+            best_dist = d
+            best = primary
+    return best
 
 
 def parse_collaborators(artist: str) -> list[str]:
@@ -108,7 +130,7 @@ def _smart_track_distance(item: Item, track_info: TrackInfo, incl_artist: bool =
     primary_item_artist = get_primary_artist(eff_art)
 
     clean_info_title = clean_title_for_matching(track_info.title)
-    primary_info_artist = get_primary_artist(track_info.artist)
+    primary_info_artist = best_artist_for_info(primary_item_artist, track_info)
 
     temp_item = Item(artist=primary_item_artist, title=clean_item_title, length=item.length)
     temp_info = TrackInfo(
