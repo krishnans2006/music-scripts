@@ -58,18 +58,22 @@
               venvVersionWarn
             '';
 
-            packages = with python.pkgs; [
-              venvShellHook
-              pip
+            packages = [
+              python.pkgs.venvShellHook
+              python.pkgs.pip
 
-              yt-dlp
-              beets
-              mutagen
-              ytmusicapi
-              rich
-              # pyacoustid
-              # pylrc
-              # beautifulsoup4
+              python.pkgs.yt-dlp
+              python.pkgs.beets
+              python.pkgs.mutagen
+              python.pkgs.ytmusicapi
+
+              python.pkgs.rich
+
+              python.pkgs.pyacoustid
+              pkgs.chromaprint
+
+              # python.pkgs.pylrc
+              # python.pkgs.beautifulsoup4
             ];
           };
         }

@@ -1,9 +1,10 @@
 """
 navidrome.py - Beets companion plugin for Navidrome integration.
 
-1. MusicBrainz smart matcher:
+1. MusicBrainz & Chroma matcher helper:
+   - Normalizes Unicode compatibility characters (e.g. full-width punctuation) via standard NFKC.
    - Removes broken 'alias' parameter from recording search queries.
-   - Strips YouTube soundtrack and feature noise (e.g. '(From Barbie The Album)').
+   - Cleans generic feature/soundtrack noise from title queries.
    - Evaluates track distance using primary artist and clean title.
 2. Navidrome multi-valued & album harmonization:
    - Preserves MusicBrainz authoritative multi-valued artists (----:com.apple.iTunes:ARTISTS).
@@ -16,6 +17,7 @@ navidrome.py - Beets companion plugin for Navidrome integration.
 
 import os
 import re
+import unicodedata
 from collections import defaultdict
 
 from beets.plugins import BeetsPlugin
@@ -25,8 +27,10 @@ import beetsplug.musicbrainz as mb
 
 
 def clean_title_for_matching(title: str) -> str:
+    """Strip generic feature tags or soundtrack labels from title for cleaner matching."""
     if not title:
         return ""
+    title = unicodedata.normalize("NFKC", title)
     cleaned = re.sub(
         r'\s*[\(\[](?:From|featuring|feat\.?|ft\.?).*?[\)\]]',
         '',
@@ -36,9 +40,23 @@ def clean_title_for_matching(title: str) -> str:
     return cleaned if cleaned else title
 
 
+def get_effective_artist_title(artist: str, title: str) -> tuple[str, str]:
+    """
+    If title is formatted as 'Artist - Title' (standard in YouTube uploads where
+    the uploader channel was stored as the artist tag), split and extract them.
+    """
+    artist = unicodedata.normalize("NFKC", artist) if artist else ""
+    title = unicodedata.normalize("NFKC", title) if title else ""
+    if " - " in title and (not artist or artist.lower() not in title.lower()):
+        parts = title.split(" - ", 1)
+        return parts[0].strip(), parts[1].strip()
+    return artist, title
+
+
 def get_primary_artist(artist: str) -> str:
     if not artist:
         return ""
+    artist = unicodedata.normalize("NFKC", artist)
     tokens = re.split(
         r'\s*(?:,|&|\bfeaturing\b|\bfeat\.?|\bft\.?|\bwith\b|\bvs\.?|\bx\b|\/|;)\s*',
         artist,
@@ -50,6 +68,7 @@ def get_primary_artist(artist: str) -> str:
 def parse_collaborators(artist: str) -> list[str]:
     if not artist:
         return []
+    artist = unicodedata.normalize("NFKC", artist)
     parts = re.split(
         r'\s*(?:,|&|\bfeaturing\b|\bfeat\.?|\bft\.?|\bwith\b|\bvs\.?|\bx\b|\/|;)\s*',
         artist,
@@ -66,22 +85,27 @@ def parse_collaborators(artist: str) -> list[str]:
 # 1. MusicBrainz query builder and track distance
 _orig_get_search = mb.MusicBrainzPlugin.get_search_query_with_filters
 
+
 def _smart_get_search_query_with_filters(self, query_type, items, artist, name, va_likely):
     if query_type == "track":
-        clean_art = get_primary_artist(artist)
-        clean_tit = clean_title_for_matching(name)
+        eff_art, eff_name = get_effective_artist_title(artist, name)
+        clean_art = get_primary_artist(eff_art)
+        clean_tit = clean_title_for_matching(eff_name)
         criteria = {"artist": clean_art, "recording": clean_tit}
         return "", {k: v.lower().strip() for k, v in criteria.items() if v.strip()}
     return _orig_get_search(self, query_type, items, artist, name, va_likely)
+
 
 mb.MusicBrainzPlugin.get_search_query_with_filters = _smart_get_search_query_with_filters
 
 
 _orig_track_distance = match.track_distance
 
+
 def _smart_track_distance(item: Item, track_info: TrackInfo, incl_artist: bool = False):
-    clean_item_title = clean_title_for_matching(item.title)
-    primary_item_artist = get_primary_artist(item.artist)
+    eff_art, eff_name = get_effective_artist_title(item.artist, item.title)
+    clean_item_title = clean_title_for_matching(eff_name)
+    primary_item_artist = get_primary_artist(eff_art)
 
     clean_info_title = clean_title_for_matching(track_info.title)
     primary_info_artist = get_primary_artist(track_info.artist)
@@ -103,6 +127,7 @@ def _smart_track_distance(item: Item, track_info: TrackInfo, incl_artist: bool =
     )
     return _orig_track_distance(temp_item, temp_info, incl_artist)
 
+
 match.track_distance = _smart_track_distance
 
 
@@ -116,7 +141,6 @@ class NavidromePlugin(BeetsPlugin):
         self.register_listener("import", self.on_import_finished)
 
     def _get_track_prefix(self, item: Item) -> str:
-        # Check raw flex dict to prevent recursive getter invocation
         prefix = item._values_flex.get("track_prefix")
         if prefix:
             return str(prefix)
@@ -195,7 +219,7 @@ class NavidromePlugin(BeetsPlugin):
             # Determine canonical date (earliest non-zero year)
             valid_years = [i.year for i in items if i.year and i.year > 0]
             canonical_year = min(valid_years) if valid_years else None
-            
+
             # Check if multi-artist compilation based on primary artist
             primary_artists = {get_primary_artist(i.artist) for i in items}
             is_comp = len(primary_artists) > 1
