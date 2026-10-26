@@ -2,7 +2,7 @@ directory: SCRIPT_DIR/final
 library: SCRIPT_DIR/beets-library.db
 pluginpath:
   - SCRIPT_DIR/plugins
-plugins: musicbrainz lyrics navidrome smartplaylist replaygain chroma
+plugins: musicbrainz lyrics navidrome smartplaylist replaygain chroma lastgenre
 
 import:
   autotag: yes
@@ -16,6 +16,14 @@ import:
 
 chroma:
   auto: yes
+
+lastgenre:
+  auto: yes
+  source: track
+  force: yes
+  canonical: yes
+  fallback: 'Music'
+  count: 1
 
 lyrics:
   auto: yes

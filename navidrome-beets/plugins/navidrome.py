@@ -6,7 +6,8 @@ navidrome.py - Beets companion plugin for Navidrome integration.
    - Cleans generic feature/edition/video noise from title queries and distance checks.
    - Matches artist against canonical artist, credit name, or collaborator list (e.g. MILEY -> Miley Cyrus).
    - Evaluates track distance using primary artist and clean title.
-2. Navidrome multi-valued & album harmonization:
+2. Navidrome multi-valued, genre & album harmonization:
+   - Ensures all tracks have a valid genre (falls back to ['Music'] for unmatched tracks).
    - Preserves MusicBrainz authoritative multi-valued artists (----:com.apple.iTunes:ARTISTS).
    - Sets primary albumartist on singletons so Navidrome never splits tracks.
    - Harmonizes album release dates across matching album names upon import completion.
@@ -156,7 +157,7 @@ match.track_distance = _smart_track_distance
 class NavidromePlugin(BeetsPlugin):
     def __init__(self):
         super().__init__()
-        self._log.info("Navidrome plugin active: multi-artist, prefix, and harmonization enabled")
+        self._log.info("Navidrome plugin active: multi-artist, prefix, genre fallback, and harmonization enabled")
         self.template_fields["track_prefix"] = self._get_track_prefix
         self.register_listener("import_task_created", self.on_import_task_created)
         self.register_listener("item_imported", self.on_item_imported)
@@ -221,6 +222,11 @@ class NavidromePlugin(BeetsPlugin):
         if not item.albumartist and primary_art:
             item.albumartist = primary_art
             item.albumartists = [primary_art]
+            changed = True
+
+        # Ensure all tracks have a genre tag (fallback to ['Music'] for unmatched tracks)
+        if not getattr(item, "genres", None):
+            item.genres = ["Music"]
             changed = True
 
         if changed:
