@@ -6,13 +6,16 @@ navidrome.py - Beets companion plugin for Navidrome integration.
    - Cleans generic feature/edition/video noise from title queries and distance checks.
    - Matches artist against canonical artist, credit name, or collaborator list (e.g. MILEY -> Miley Cyrus).
    - Evaluates track distance using primary artist and clean title.
-2. Navidrome multi-valued, genre & album harmonization:
+2. Enhanced LastGenre lookup for multi-artist collaborations & root genres:
+   - Hooks LastFmClient and artist stage to resolve primary artist / collaborators on collaborations.
+   - Adds 'folk' to the genre whitelist so acoustic/indie folk artists resolve cleanly.
+3. Navidrome multi-valued, genre & album harmonization:
    - Ensures all tracks have a valid genre (falls back to ['Music'] for unmatched tracks).
    - Preserves MusicBrainz authoritative multi-valued artists (----:com.apple.iTunes:ARTISTS).
    - Sets primary albumartist on singletons so Navidrome never splits tracks.
    - Harmonizes album release dates across matching album names upon import completion.
    - Sets compilation flag (cpil = 1) only for multi-artist albums.
-3. Playlist prefix preservation:
+4. Playlist prefix preservation:
    - Preserves the 4-digit playlist numbering prefix in filename and track tags.
 """
 
@@ -154,10 +157,77 @@ def _smart_track_distance(item: Item, track_info: TrackInfo, incl_artist: bool =
 match.track_distance = _smart_track_distance
 
 
+# 2. Enhanced LastGenre lookup for multi-artist collaborations & root genres
+try:
+    import beetsplug.lastgenre as lg
+
+    _orig_load_whitelist = lg.LastGenrePlugin._load_whitelist
+
+    def _smart_load_whitelist(self):
+        wl = _orig_load_whitelist(self)
+        wl.add("folk")
+        return wl
+
+    lg.LastGenrePlugin._load_whitelist = _smart_load_whitelist
+
+    _orig_lastfm_fetch = lg.LastFmClient.fetch
+
+    def _smart_lastfm_fetch(self, kind: str, obj, *args: str):
+        res = _orig_lastfm_fetch(self, kind, obj, *args)
+        if res:
+            return res
+
+        # If track lookup returned empty, try primary artist and cleaned title
+        if not args and hasattr(obj, "artist"):
+            primary_art = get_primary_artist(obj.artist)
+            clean_tit = getattr(obj, "title", "")
+            if clean_tit:
+                clean_tit = clean_title_for_matching(clean_tit)
+            if kind == "track" and (primary_art != obj.artist or clean_tit != getattr(obj, "title", "")):
+                method, _ = self.FETCH_METHODS[kind]
+                res = self._last_lookup(kind, method, primary_art, clean_tit)
+                if res:
+                    return res
+        return res
+
+    lg.LastFmClient.fetch = _smart_lastfm_fetch
+
+    _orig_fetch_artist_stage = lg.LastGenrePlugin._fetch_artist_stage
+
+    def _smart_fetch_artist_stage(self, obj):
+        stage_label, new_genres, stage_artist = _orig_fetch_artist_stage(self, obj)
+        resolved = self._resolve_genres(new_genres, artist=stage_artist)
+        if resolved:
+            return stage_label, new_genres, stage_artist
+
+        # If resolution failed (e.g. collaboration string or non-genre tags), try primary artist
+        if hasattr(obj, "artist"):
+            primary = get_primary_artist(obj.artist)
+            if primary and primary != obj.artist:
+                alt_genres = self.client.fetch("artist", obj, primary)
+                if self._resolve_genres(alt_genres, artist=primary):
+                    return f"{stage_label} (primary)", alt_genres, primary
+
+            # Also try individual collaborators if available
+            if getattr(obj, "artists", None):
+                for alt in obj.artists:
+                    p_alt = get_primary_artist(alt)
+                    if p_alt and p_alt not in (obj.artist, primary):
+                        alt_genres = self.client.fetch("artist", obj, p_alt)
+                        if self._resolve_genres(alt_genres, artist=p_alt):
+                            return f"{stage_label} (collaborator)", alt_genres, p_alt
+
+        return stage_label, new_genres, stage_artist
+
+    lg.LastGenrePlugin._fetch_artist_stage = _smart_fetch_artist_stage
+except ImportError:
+    pass
+
+
 class NavidromePlugin(BeetsPlugin):
     def __init__(self):
         super().__init__()
-        self._log.info("Navidrome plugin active: multi-artist, prefix, genre fallback, and harmonization enabled")
+        self._log.info("Navidrome plugin active: multi-artist, prefix, genre enhancement, and harmonization enabled")
         self.template_fields["track_prefix"] = self._get_track_prefix
         self.register_listener("import_task_created", self.on_import_task_created)
         self.register_listener("item_imported", self.on_item_imported)

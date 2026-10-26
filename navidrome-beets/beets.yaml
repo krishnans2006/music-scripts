@@ -56,3 +56,6 @@ smartplaylist:
   relative_to: SCRIPT_DIR/final
   output: extm3u
   auto: yes
+  playlists:
+    - name: 'Liked Music.m3u8'
+      query: 'track+'
