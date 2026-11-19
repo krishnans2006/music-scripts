@@ -15,20 +15,35 @@ navidrome.py - Beets companion plugin for Navidrome integration.
    - Sets primary albumartist on singletons so Navidrome never splits tracks.
    - Harmonizes album release dates across matching album names upon import completion.
    - Sets compilation flag (cpil = 1) only for multi-artist albums.
-4. Playlist prefix preservation:
-   - Preserves the 4-digit playlist numbering prefix in filename and track tags.
+4. YouTube Music playlists:
+   - Builds ordered playlists using the source URLs preserved in the library.
+   - Links skipped duplicate uploads to the track Beets kept.
 """
 
+import json
 import os
 import re
 import unicodedata
 from collections import defaultdict
+from pathlib import Path
 
+from beets import ui
 from beets.plugins import BeetsPlugin
 from beets.autotag import match, TrackInfo
 from beets.autotag.distance import string_dist
+from beets.importer import DuplicateAction, SingletonImportTask
 from beets.library import Item
 import beetsplug.musicbrainz as mb
+
+
+YOUTUBE_URL = re.compile(
+    r"https?://(?:www\.|music\.)?youtube\.com/watch\?v=([A-Za-z0-9_-]{11})(?:[&#]|$)"
+)
+
+
+def youtube_id(item: Item) -> str | None:
+    result = YOUTUBE_URL.match(item.comments)
+    return result[1] if result else None
 
 
 def clean_title_for_matching(title: str) -> str:
@@ -227,55 +242,83 @@ except ImportError:
 class NavidromePlugin(BeetsPlugin):
     def __init__(self):
         super().__init__()
-        self._log.info("Navidrome plugin active: multi-artist, prefix, genre enhancement, and harmonization enabled")
-        self.template_fields["track_prefix"] = self._get_track_prefix
-        self.register_listener("import_task_created", self.on_import_task_created)
+        self._log.info("Navidrome plugin active: multi-artist, genre enhancement, harmonization, and playlists enabled")
+        self.register_listener("import_begin", self.on_import_begin)
         self.register_listener("item_imported", self.on_item_imported)
         self.register_listener("import", self.on_import_finished)
 
-    def _get_track_prefix(self, item: Item) -> str:
-        prefix = item._values_flex.get("track_prefix")
-        if prefix:
-            return str(prefix)
-        path_str = item.path.decode("utf-8", "ignore") if isinstance(item.path, bytes) else str(item.path or "")
-        m = re.match(r"^(\d{4})\s*-\s*", os.path.basename(path_str))
-        if m:
-            prefix = m.group(1)
-            item._values_flex["track_prefix"] = prefix
-            return prefix
-        if getattr(item, "track", None):
-            return f"{item.track:04d}"
-        return "0000"
+    def commands(self):
+        command = ui.Subcommand("yt-playlists", help="generate M3U8 files from YouTube playlist order")
+        command.parser.usage = "%prog SOURCES"
+        command.func = self.write_playlists
+        return [command]
 
-    def on_import_task_created(self, session, task):
-        items = task.imported_items() if hasattr(task, "imported_items") else ([task.item] if hasattr(task, "item") else [])
-        for item in items:
-            path_str = item.path.decode("utf-8", "ignore") if isinstance(item.path, bytes) else str(item.path or "")
-            m = re.match(r"^(\d{4})\s*-\s*", os.path.basename(path_str))
-            if m:
-                item._values_flex["track_prefix"] = m.group(1)
+    def write_playlists(self, lib, opts, args):
+        if len(args) != 1:
+            raise ui.UserError("Pass the playlist manifest created by ./01download.sh.")
+
+        directory = Path(os.fsdecode(lib.directory))
+        entries = {}
+        for item in lib.items():
+            path = Path(os.fsdecode(item.path))
+            if not path.is_relative_to(directory) or not path.is_file():
+                continue
+
+            relative_path = path.relative_to(directory).as_posix()
+            if relative_path.startswith("#"):
+                relative_path = f"./{relative_path}"
+            title = " ".join(f"{item.artist} - {item.title}".splitlines())
+            entry = f"#EXTINF:{int(item.length)},{title}\n{relative_path}\n"
+
+            if video_id := youtube_id(item):
+                entries[video_id] = entry
+            for alias in item.get("youtube_aliases", "").split():
+                entries.setdefault(alias, entry)
+
+        directory.mkdir(parents=True, exist_ok=True)
+        for line in Path(args[0]).read_text(encoding="utf-8").splitlines():
+            playlist = json.loads(line)
+            name = playlist["title"].replace("/", "_")
+            tracks = playlist["entries"]
+            if playlist["original_url"].endswith("?list=LM"):
+                name = "Liked Music"
+                tracks = reversed(tracks)  # Keep Liked Music oldest first.
+
+            missing = 0
+            with (directory / f"{name}.m3u8").open("w", encoding="utf-8") as output:
+                output.write("#EXTM3U\n")
+                for track in tracks:
+                    entry = entries.get(track.get("id")) if track else None
+                    if entry:
+                        output.write(entry)
+                    else:
+                        missing += 1
+            if missing:
+                self._log.warning("{}: {} entries have no local audio", name, missing)
+
+    def on_import_begin(self, session):
+        resolve_duplicate = session.get_duplicate_action
+
+        # Keep both source IDs when Beets keeps one of two matching uploads.
+        def get_duplicate_action(task, duplicates):
+            action = resolve_duplicate(task, duplicates)
+            if action != DuplicateAction.SKIP or not isinstance(task, SingletonImportTask):
+                return action
+            if len(duplicates) != 1:
+                return action
+
+            existing = duplicates[0]
+            video_id = youtube_id(task.item)
+            aliases = existing.get("youtube_aliases", "").split()
+            if video_id and video_id != youtube_id(existing) and video_id not in aliases:
+                existing["youtube_aliases"] = " ".join([*aliases, video_id])
+                existing.store()
+            return action
+
+        session.get_duplicate_action = get_duplicate_action
 
     def on_item_imported(self, lib, item: Item):
         changed = False
-
-        # Set track number to playlist order index if track_prefix is present
-        prefix = item._values_flex.get("track_prefix")
-        if not prefix:
-            path_str = item.path.decode("utf-8", "ignore") if isinstance(item.path, bytes) else str(item.path or "")
-            m = re.match(r"^(\d{4})\s*-\s*", os.path.basename(path_str))
-            if m:
-                prefix = m.group(1)
-                item._values_flex["track_prefix"] = prefix
-
-        if prefix:
-            try:
-                new_track = int(prefix)
-                if item.track != new_track:
-                    item.track = new_track
-                    item.tracktotal = None
-                    changed = True
-            except (ValueError, TypeError):
-                pass
 
         # Prefer MusicBrainz authoritative multi-valued artists if already populated
         if not item.artists:

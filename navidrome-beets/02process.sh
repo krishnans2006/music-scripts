@@ -4,22 +4,20 @@
 # - Fetch metadata from MusicBrainz and tag tracks for Navidrome
 # - Embed synced lyrics
 # - Move the processed music to a flat directory structure (./final)
-# - Generate/update the Liked Music.m3u8 smart playlist
+# - Generate ordered M3U8 files for the downloaded playlists
 # - Calculate ReplayGain loudness normalization tags using ffmpeg
 
 set -e
 
-if [ ! -d "./staging" ] || [ -z "$(ls -A ./staging)" ]; then
-   echo "No new music downloaded in ./staging. Exiting."
-   exit 0
-fi
-
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
 sed -e "s|SCRIPT_DIR|$SCRIPT_DIR|g" beets.yaml > beets-generated.yaml
 
-beet -c ./beets-generated.yaml import ./staging
+if [[ -d ./staging && -n $(ls -A ./staging) ]]; then
+    beet -c ./beets-generated.yaml import ./staging
+    beet -c ./beets-generated.yaml replaygain
+fi
 
-beet -c ./beets-generated.yaml splupdate
-
-beet -c ./beets-generated.yaml replaygain
+if [[ -f ./.playlists/sources.jsonl ]]; then
+    beet -c ./beets-generated.yaml yt-playlists ./.playlists/sources.jsonl
+fi

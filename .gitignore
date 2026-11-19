@@ -166,6 +166,7 @@ staging/
 staging-backup/
 staging-backup-old/
 final/
+/navidrome-beets/.playlists/
 yt-dlp-archive.txt
 beets-generated.yaml
 beets-library.db*
