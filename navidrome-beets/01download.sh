@@ -8,7 +8,7 @@ PLAYLIST_URLS=(
     "https://music.youtube.com/playlist?list=LM"
     "https://music.youtube.com/playlist?list=PLdRk0edErpmASvp1jwflNbSgbiLRrG6q1" # Christmas
 )
-FIREFOX_PROFILE_DIR=$(find ~/.var/app/app.zen_browser.zen/.zen -name '*.Default (release)' -type d -print -quit)
+FIREFOX_PROFILE_DIR="~/.config/zen/default"
 
 mkdir -p ./staging ./.playlists
 
