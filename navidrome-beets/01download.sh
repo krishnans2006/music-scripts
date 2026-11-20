@@ -16,15 +16,12 @@ mkdir -p ./staging ./.playlists
 yt-dlp --flat-playlist --dump-single-json --no-download-archive --abort-on-error \
     --cookies-from-browser "firefox:$FIREFOX_PROFILE_DIR" \
     "${PLAYLIST_URLS[@]}" > ./.playlists/sources.tmp
-mv ./.playlists/sources.tmp ./.playlists/sources.jsonl
 
-yt-dlp \
+python3 ./download-playlists.py \
     -t aac \
     --audio-quality 0 \
     --embed-thumbnail --convert-thumbnail jpg \
     --ppa "ThumbnailsConvertor+FFmpeg_o:-c:v mjpeg -qmin 1 -qscale:v 1 -vf crop=\"'if(gt(ih,iw),iw,ih)':'if(gt(iw,ih),ih,iw)'\"" \
     --embed-metadata \
     -o "./staging/%(id)s.%(ext)s" \
-    --cookies-from-browser "firefox:$FIREFOX_PROFILE_DIR" \
-    --download-archive "./yt-dlp-archive.txt" \
-    "${PLAYLIST_URLS[@]}"
+    --cookies-from-browser "firefox:$FIREFOX_PROFILE_DIR"

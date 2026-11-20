@@ -288,7 +288,8 @@ class NavidromePlugin(BeetsPlugin):
             with (directory / f"{name}.m3u8").open("w", encoding="utf-8") as output:
                 output.write("#EXTM3U\n")
                 for track in tracks:
-                    entry = entries.get(track.get("id")) if track else None
+                    video_id = track.get("download_id", track.get("id")) if track else None
+                    entry = entries.get(video_id)
                     if entry:
                         output.write(entry)
                     else:
