@@ -22,7 +22,8 @@ UNAVAILABLE = re.compile(
 )
 ARTIST_SUFFIX = re.compile(r"\s+(?:- Topic|Official(?: Artist Channel)?|Videos)$", re.IGNORECASE)
 TITLE_DETAILS = re.compile(
-    r"\s*\((?:feat(?:uring)?\.?\s+[^)]*|ft\.?\s+[^)]*|remaster(?:ed)?(?:\s+\d{4})?"
+    r"\s*\((?:(?:feat(?:uring)?\.?|ft\.?)\s+(?P<feature>[^)]+)"
+    r"|remaster(?:ed)?(?:\s+(?P<remaster>\d{4}))?"
     r"|studio(?: version| recording\b[^)]*)?)\)",
     re.IGNORECASE,
 )
@@ -80,54 +81,75 @@ def key(text):
     return "".join(char for char in unicodedata.normalize("NFKC", text).casefold() if char.isalnum())
 
 
+def title_details(title):
+    return {
+        match.lastgroup: key(match[match.lastgroup])
+        for match in TITLE_DETAILS.finditer(title)
+        if match.lastgroup
+    }
+
+
+def search_candidates(catalog, video_id, title, artist, duration, channel_id):
+    if not (title and artist and duration):
+        return []
+
+    artist_key = key(artist)
+    search_title = TITLE_DETAILS.sub("", title)
+    title_key = key(search_title)
+    details = title_details(title)
+    matches = []
+    for song in catalog.search(f"{artist} {search_title}", filter="songs", limit=10):
+        alternative = song.get("videoId")
+        length = song.get("duration_seconds")
+        if not alternative or alternative == video_id or length is None or abs(length - duration) > 5:
+            continue
+        candidate_title = song.get("title") or ""
+        if key(TITLE_DETAILS.sub("", candidate_title)) != title_key:
+            continue
+        candidate_details = title_details(candidate_title)
+        if any(details[name] != candidate_details[name] for name in details.keys() & candidate_details.keys()):
+            continue
+
+        credits = song.get("artists")
+        if not credits:
+            try:
+                video = catalog.get_song(alternative).get("videoDetails") or {}
+            except (RequestException, YTMusicError) as error:
+                print(f"Could not verify the artist for {alternative}: {error}", file=sys.stderr)
+                continue
+            credits = [{"id": video.get("channelId"), "name": video.get("author")}]
+        if any(
+            (channel_id and credit.get("id") == channel_id)
+            or key(credit.get("name") or "") == artist_key
+            for credit in credits
+        ):
+            matches.append(alternative)
+    return matches
+
+
 def candidates(catalog, source):
+    video_id = source["id"]
     title = source.get("title") or ""
     artist = source.get("artist") or source.get("channel") or source.get("uploader") or ""
     artist = ARTIST_SUFFIX.sub("", artist)
     duration = source.get("duration")
-    channel_ids = {source.get("channel_id")} - {None}
-    original = None
+    channel_id = source.get("channel_id")
+    metadata = (title, artist, duration, channel_id)
+    matches = search_candidates(catalog, video_id, *metadata)
+    if matches:
+        return matches
 
-    if not (title and artist and duration):
-        original = catalog.get_song(source["id"]).get("videoDetails", {})
-        title = title or original.get("title")
-        artist = artist or original.get("author")
-        duration = duration or int(original.get("lengthSeconds") or 0)
-        if not (title and artist and duration):
-            return []
-
-    artist_names = {key(artist)}
-    search_title = TITLE_DETAILS.sub("", title)
-    matches = []
-    for song in catalog.search(f"{artist} {search_title}", filter="songs", limit=10):
-        video_id = song.get("videoId")
-        length = song.get("duration_seconds")
-        if not video_id or video_id == source["id"] or length is None or abs(length - duration) > 5:
-            continue
-        if key(TITLE_DETAILS.sub("", song.get("title") or "")) == key(search_title):
-            matches.append(song)
-
-    def matching_artist(song):
-        return any(
-            credit.get("id") in channel_ids or key(credit.get("name") or "") in artist_names
-            for credit in song.get("artists") or []
-        )
-
-    for song in matches:
-        if not song.get("artists"):
-            details = catalog.get_song(song["videoId"]).get("videoDetails", {})
-            song["artists"] = [{"id": details.get("channelId"), "name": details.get("author")}]
-
-    if matches and not any(matching_artist(song) for song in matches):
-        # The playlist channel can be branded differently from the catalog artist.
-        if original is None:
-            original = catalog.get_song(source["id"]).get("videoDetails", {})
-        if channel_id := original.get("channelId"):
-            channel_ids.add(channel_id)
-        if author := original.get("author"):
-            artist_names.add(key(author))
-
-    return [song["videoId"] for song in matches if matching_artist(song)]
+    # A playlist uploader can differ from the recording's catalog artist.
+    original = catalog.get_song(video_id).get("videoDetails") or {}
+    enriched = (
+        title or original.get("title"),
+        original.get("author") or artist,
+        duration or int(original.get("lengthSeconds") or 0),
+        original.get("channelId") or channel_id,
+    )
+    if enriched == metadata:
+        return []
+    return search_candidates(catalog, video_id, *enriched)
 
 
 def resolve(plans, selected, unavailable, downloaded, options):
@@ -155,6 +177,7 @@ def resolve(plans, selected, unavailable, downloaded, options):
 def main(options):
     playlists = read_playlists(PENDING_SOURCES)
     entries = playlist_tracks(playlists)
+    unidentified = sum(len(playlist["entries"]) for playlist in playlists) - len(entries)
     plans = {track["id"]: track for track in entries}
     downloaded = archived_ids()
     selected = {video_id: video_id for video_id in plans}
@@ -181,10 +204,16 @@ def main(options):
             output.write(json.dumps(playlist) + "\n")
     PENDING_SOURCES.replace(SOURCES)
 
-    missing = [f"{track.get('title', vid)} ({vid})" for vid, track in plans.items() if selected[vid] not in downloaded]
+    missing = [
+        f"{track.get('title', vid)} ({vid})"
+        for vid, track in plans.items()
+        if selected[vid] not in downloaded
+    ]
     for track in missing:
         print(f"No audio downloaded for {track}", file=sys.stderr)
-    return bool(missing)
+    if unidentified:
+        print(f"No video ID for {unidentified} playlist entries", file=sys.stderr)
+    return bool(missing or unidentified)
 
 
 if __name__ == "__main__":
